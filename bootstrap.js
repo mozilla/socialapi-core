@@ -565,7 +565,7 @@ function startup(aParams, aReason) {
   OverlayManager.init(aParams, function() {
     // addon specific stuff we need to start before
     // applying our overlays
-    Cu.import("resource://socialdev/modules/registry.js");
+    Cu.import("resource://socialapi-core/modules/registry.js");
   });
 }
 
@@ -573,7 +573,7 @@ function shutdown(aParams, aReason) {
   // We need to shutdown the typedstorage database else we assert in
   // debug builds at shutdown.
   let tmp = {};
-  Cu.import("resource://socialdev/modules/manifestDB.jsm", tmp);
+  Cu.import("resource://socialapi-core/modules/manifestDB.jsm", tmp);
   tmp.ManifestDB.close();
 
   // Don't need to clean anything else up if the application is shutting down
