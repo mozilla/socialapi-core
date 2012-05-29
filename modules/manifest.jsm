@@ -1,16 +1,21 @@
+/* -*- Mode: JavaScript; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/.
+ *
+ * Contributor(s):
+ *  Shane Caraveo <scaraveo@mozilla.com>
+ *
+ * Utility methods for dealing with service manifests.
+ */
 
-function normalizeOriginPort(aURL) {
-  try {
-    let uri = Services.io.newURI(aURL, null, null);
-    if (uri.scheme == 'resource') return aURL;
-    return uri.hostPort;
-  }
-  catch(e) {
-    Cu.reportError(e);
-  }
-  return aURL;
-}
-
+/** Helper function to detect "development mode",
+ * which is set with the social.provider.devmode pref.
+ *
+ * When "devmode" is set, service URLs can be served
+ * domains other than the manifest's origin.
+ */ 
 function isDevMode() {
   prefBranch = Services.prefs.getBranch("social.provider.").QueryInterface(Ci.nsIPrefBranch2);
   let enable_dev = false;
@@ -24,6 +29,7 @@ function isDevMode() {
  * testSafebrowsing
  *
  * given a url, see if it is in our malware/phishing lists.
+ * Returns immediately, calling the callback when a result is known.
  * Callback gets one param, the result which will be non-zero
  * if the url is a problem.
  *
@@ -57,6 +63,10 @@ function testSafebrowsing(aUrl, aCallback) {
  *
  * look into our addon/feature dir and see if we have any builtin providers to install
  */
+
+/// XXX should be called from UI side of things?
+/// XXX instead a method with array of files to load?
+
 function getDefaultProviders() {
   var URIs = [];
   try {
@@ -112,20 +122,33 @@ function getDefaultProviders() {
 }
 
 
+/* Utility function: returns the host:port of
+ * of a URI, or simply the host, if no port
+ * is provided.  If the URI cannot be parsed,
+ * or is a resource: URI, returns the input
+ * URI text. */
+function normalizeOriginPort(aURL) {
+  try {
+    let uri = Services.io.newURI(aURL, null, null);
+    if (uri.scheme == 'resource') return aURL;
+    return uri.hostPort;
+  }
+  catch(e) {
+    Cu.reportError(e);
+  }
+  return aURL;
+}
+
+
 /**
- * manifestRegistry is our internal api for registering manfist files that
-   contain data for various services. It holds a registry of installed activity
-   handlers, their mediators, and allows for invoking a mediator for installed
-   services.
+ * manifestRegistry is our internal api for registering manifest files that
+   contain data for various services.   It interacts with ManifestDB to
+   store a list of service manifests, keyed on domain.
  */
 function ManifestRegistry() {
   this._prefBranch = Services.prefs.getBranch("social.provider.").QueryInterface(Ci.nsIPrefBranch2);
   Services.obs.addObserver(this, "document-element-inserted", true);
-  //Services.obs.addObserver(this, "origin-manifest-registered", true);
-  //Services.obs.addObserver(this, "origin-manifest-unregistered", true);
-  // later we can hook into webapp installs
-  //Services.obs.addObserver(this, "openwebapp-installed", true);
-  //Services.obs.addObserver(this, "openwebapp-uninstalled", true);
+  // TODO: should observe DOMLinkAdded instead of document-element-inserted
 
   // load the builtin providers if any
   let URIs = getDefaultProviders();
@@ -141,15 +164,6 @@ ManifestRegistry.prototype = {
   classID: manifestRegistryClassID,
   contractID: manifestRegistryCID,
   QueryInterface: XPCOMUtils.generateQI([Ci.nsISupportsWeakReference, Ci.nsIObserver]),
-
-  _getUsefulness: function manifestRegistry_findMeABetterName(url, loginHost) {
-    let hosturl = Services.io.newURI(url, null, null);
-    loginHost = loginHost || hosturl.scheme+"://"+hosturl.host;
-    return {
-      hasLogin: hasLogin(loginHost),
-      frecency: frecencyForUrl(hosturl.host)
-    }
-  },
 
   askUserInstall: function(aWindow, aCallback, location) {
     let origin = normalizeOriginPort(location);
@@ -202,13 +216,17 @@ ManifestRegistry.prototype = {
     // anything in URLEntries will require same-origin policy, though we
     // special-case iconURL to allow icons from CDN
     let URLEntries = ['iconURL', 'workerURL', 'sidebarURL'];
+
     // only items in validEntries will move into our cleaned manifest
     let validEntries = ['name'].concat(URLEntries);
+
+    // Is this a "built-in" service?
     let builtin = location.indexOf("resource:") == 0;
     if (builtin) {
       // builtin manifests may have a couple other entries
       validEntries = validEntries.concat('origin', 'contentPatchPath');
     }
+
     // store the location we got the manifest from and the origin.
     let manifest = {
       location: location
@@ -218,27 +236,31 @@ ManifestRegistry.prototype = {
     }
     // we've saved original location in manifest above, switch our location
     // temporarily so we can correctly resolve urls for our builtins.  We
-    // still valide the origin defined in a builtin manifest below.
+    // still validate the origin defined in a builtin manifest below.
     if (builtin && manifest.origin) {
       location = manifest.origin;
     }
+
     // resolve all URLEntries against the manifest location.
     let basePathURI = Services.io.newURI(location, null, null);
     // full proto+host+port origin for resolving same-origin urls
     manifest.origin = basePathURI.prePath;
     for each(let k in URLEntries) {
+      
       if (!manifest[k]) continue;
+      
       // shortcut - resource:// URIs don't get same-origin checks.
       if (builtin && manifest[k].indexOf("resource:") == 0) continue;
+      
       // resolve the url to the basepath to handle relative urls, then verify
       // same-origin, we'll let iconURL be on a different origin
       let url = basePathURI.resolve(manifest[k]);
+      
       if (k != 'iconURL' && url.indexOf(manifest.origin) != 0) {
-        throw new Error("manifest url origin mismatch " +manifest.origin+ " != " + manifest[k] +"\n")
+        throw new Error("manifest URL origin mismatch " +manifest.origin+ " != " + manifest[k] +"\n")
       }
       manifest[k] = url; // store the resolved version
     }
-    //dump("manifest "+JSON.stringify(manifest)+"\n");
     return manifest;
   },
 
@@ -272,18 +294,11 @@ ManifestRegistry.prototype = {
     }
 
     if (systemInstall) {
+      // user approval has already been granted, or this is an automatic operation
       installManifest();
     }
     else {
-      let info = this._getUsefulness(location);
-      if (!info.hasLogin && info.frecency < FRECENCY) {
-        //Services.console.logStringMessage("this site simply is not important, skip it");
-        return;
-      }
-      // we reached here because the user has a login or visits this site
-      // often, so we want to offer an install to the user
-      //Services.console.logStringMessage("installing "+location+ " because "+JSON.stringify(info));
-      // prompt user for install
+      // we need to ask the user for confirmation:
       var xulWindow = aDocument.defaultView.QueryInterface(Ci.nsIInterfaceRequestor)
                      .getInterface(Ci.nsIWebNavigation)
                      .QueryInterface(Ci.nsIDocShellTreeItem)
@@ -292,8 +307,10 @@ ManifestRegistry.prototype = {
                      .getInterface(Ci.nsIDOMWindow);
       this.askUserInstall(xulWindow, function() {
         installManifest();
+
         // user requested install, lets make sure we enable after the install.
         // This is especially important on first time install.
+
         registry().enabled = true;
         let prefBranch = Services.prefs.getBranch("social.provider.").QueryInterface(Ci.nsIPrefBranch2);
         prefBranch.setBoolPref("visible", true);
@@ -307,21 +324,21 @@ ManifestRegistry.prototype = {
 
   _checkManifestSecurity: function(channel) {
     // this comes from https://developer.mozilla.org/En/How_to_check_the_security_state_of_an_XMLHTTPRequest_over_SSL
-    // although we are more anal about things (ie, secInfo MUST be a nsITransportSecurityInfo and a nsISSLStatusProvider)
+    // although we are more picky about things (ie, secInfo MUST be a nsITransportSecurityInfo and a nsISSLStatusProvider)
     let secInfo = channel.securityInfo;
     if (!(secInfo instanceof Ci.nsITransportSecurityInfo) || ((secInfo.securityState & Ci.nsIWebProgressListener.STATE_IS_SECURE) != Ci.nsIWebProgressListener.STATE_IS_SECURE)) {
-      Cu.reportError("The social manifest securityState is not secure");
+      Cu.reportError("Attempt to load social service from insecure location (manifest securityState is not secure)");
       return false;
     }
     if (!(secInfo instanceof Ci.nsISSLStatusProvider)) {
-      Cu.reportError("The social manifest host has no SSLStatusProvider");
+      Cu.reportError("Attempt to load social service from insecure location (manifest host has no SSLStatusProvider)");
       return false;
     }
     let cert = secInfo.QueryInterface(Ci.nsISSLStatusProvider)
                .SSLStatus.QueryInterface(Ci.nsISSLStatus).serverCert;
     let verificationResult = cert.verifyForUsage(Ci.nsIX509Cert.CERT_USAGE_SSLServer);
     if (verificationResult != Ci.nsIX509Cert.VERIFIED_OK) {
-      Cu.reportError("The SSL status of the manifest host is invalid");
+      Cu.reportError("Attempt to load social service from insecure location (SSL status of the manifest host is invalid)");
       return false;
     }
     return true;
@@ -332,7 +349,7 @@ ManifestRegistry.prototype = {
     let self = this;
     testSafebrowsing(url, function(result) {
       if (result != 0) {
-        Cu.reportError("unable to load manifest due to safebrowsing result: ["+result+"] "+url);
+        Cu.reportError("Attempt to load social service from unsafe location (safebrowsing result: ["+result+"] "+url + ")");
         if (callback) callback(false);
         return;
       }
@@ -343,7 +360,7 @@ ManifestRegistry.prototype = {
       xhr.onreadystatechange = function(aEvt) {
         if (xhr.readyState == 4) {
           if (xhr.status == 200 || xhr.status == 0) {
-            //Services.console.logStringMessage("got response "+xhr.responseText);
+            
             // We implicitly trust resource:// manifest origins.
             let needSecureManifest = !isDevMode() && url.indexOf("resource://") != 0;
             if (needSecureManifest && !self._checkManifestSecurity(xhr.channel)) {
@@ -354,16 +371,15 @@ ManifestRegistry.prototype = {
               self.importManifest(aDocument, url, JSON.parse(xhr.responseText), systemInstall, callback);
             }
             catch(e) {
-              Cu.reportError("importManifest "+url+": "+e);
+              Cu.reportError("Error while loading social service manifest from "+url+": "+e);
               if (callback) callback(false);
             }
           }
           else {
-            Services.console.logStringMessage("got status "+xhr.status);
+            Cu.reportError("Error while loading social service manifest from " + url + ": status "+xhr.status);
           }
         }
       };
-      //Services.console.logStringMessage("fetch "+url);
       xhr.send(null);
     });
   },
