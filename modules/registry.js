@@ -15,10 +15,10 @@ const {classes: Cc, interfaces: Ci, utils: Cu, manager: Cm} = Components;
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
-Cu.import("resource://socialdev/modules/defaultprefs.js");
-Cu.import("resource://socialdev/modules/provider.js");
-Cu.import("resource://socialdev/modules/manifestDB.jsm");
-Cu.import("resource://socialdev/modules/defaultServices.jsm");
+Cu.import("resource://socialapi-core/modules/defaultprefs.js");
+Cu.import("resource://socialapi-core/modules/provider.js");
+Cu.import("resource://socialapi-core/modules/manifestDB.jsm");
+Cu.import("resource://socialapi-core/modules/defaultServices.jsm");
 
 const NS_XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
 const FRECENCY = 100;
