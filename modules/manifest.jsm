@@ -15,6 +15,14 @@ const EXPORTED_SYMBOLS = ['ManifestRegistry', 'isDevMode'];
 const {classes: Cc, interfaces: Ci, utils: Cu, manager: Cm} = Components;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
+Cu.import("resource://socialapi-core/modules/manifestDB.jsm");
+
+// ack - work around circular import issues.
+function registry() {
+  let tmp = {};
+  Cu.import("resource://socialapi-core/modules/registry.js", tmp);
+  return tmp.registry();
+}
 
 /** Helper function to detect "development mode",
  * which is set with the social.provider.devmode pref.
