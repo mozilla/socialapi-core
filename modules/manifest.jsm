@@ -10,6 +10,12 @@
  * Utility methods for dealing with service manifests.
  */
 
+const EXPORTED_SYMBOLS = ['ManifestRegistry', 'isDevMode'];
+
+const {classes: Cc, interfaces: Ci, utils: Cu, manager: Cm} = Components;
+Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+Cu.import("resource://gre/modules/Services.jsm");
+
 /** Helper function to detect "development mode",
  * which is set with the social.provider.devmode pref.
  *

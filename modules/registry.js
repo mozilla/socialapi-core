@@ -16,9 +16,9 @@ const {classes: Cc, interfaces: Ci, utils: Cu, manager: Cm} = Components;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://socialapi-core/modules/defaultprefs.js");
-Cu.import("resource://socialapi-core/modules/provider.js");
 Cu.import("resource://socialapi-core/modules/manifestDB.jsm");
-Cu.import("resource://socialapi-core/modules/defaultServices.jsm");
+Cu.import("resource://socialapi-core/modules/manifest.jsm");
+//Cu.import("resource://socialapi-core/modules/defaultServices.jsm");
 
 const NS_XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
 const FRECENCY = 100;
@@ -27,8 +27,9 @@ const FRECENCY = 100;
 const providerRegistryClassID = Components.ID("{1a60fb78-b2d2-104b-b16a-7f497be5626d}");
 const providerRegistryCID = "@mozilla.org/socialProviderRegistry;1";
 
-function ProviderRegistry() {
+function ProviderRegistry(createCallback) {
   dump("social registry service initializing\n");
+  this.createProviderCallback = createCallback;
   this.manifestRegistry = new ManifestRegistry();
   this._prefBranch = Services.prefs.getBranch("social.provider.").QueryInterface(Ci.nsIPrefBranch2);
 
@@ -124,7 +125,7 @@ ProviderRegistry.prototype = {
   register: function(manifest) {
     // we are not pushing into manifestDB here, rather manifestDB is calling us
     try {
-      let provider = new SocialProvider(manifest);
+      let provider = this.createProviderCallback(manifest);
       this._providers[manifest.origin] = provider;
       // registration on startup could happen in any order, so we avoid
       // setting this as "current".
@@ -328,7 +329,14 @@ ProviderRegistry.prototype = {
 
 //const components = [ProviderRegistry];
 //const NSGetFactory = XPCOMUtils.generateNSGetFactory(components);
+let providerRegistrySingleton;
 
-providerRegistrySinglton = new ProviderRegistry();
-function registry() providerRegistrySinglton;
-const EXPORTED_SYMBOLS = ["registry"];
+function initialize(createCallback) {
+  if (providerRegistrySingleton) {
+    throw new Error("already initialized");
+  }
+  providerRegistrySingleton = new ProviderRegistry(createCallback);
+}
+
+function registry() providerRegistrySingleton;
+const EXPORTED_SYMBOLS = ["registry", "initialize"];
