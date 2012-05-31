@@ -29,7 +29,6 @@ var workerInfos = {}; // keyed by URL.
 
 function log(msg) {
   Services.console.logStringMessage(new Date().toISOString() + " [frameworker]: " + msg);
-  dump(new Date().toISOString() + " [frameworker]: " + msg + "\n");
 };
 
 var _nextPortId = 1;
@@ -40,7 +39,7 @@ function __initWorkerMessageHandler() {
 
   let ports = {}; // all "worker" ports currently alive, keyed by ID.
 
-  function _messageHandler(event) {
+  function messageHandler(event) {
     // We will ignore all messages destined for otherType.
     let data = event.data;
     let portid = data.portId;
@@ -77,23 +76,13 @@ function __initWorkerMessageHandler() {
         port = ports[portid];
         if (!port) {
           // port must be closed - this shouldn't happen!
-          dump("port-message but port is closed\n");
           return;
         }
         port._onmessage(data.data);
         break;
 
       default:
-        dump("unexpected worker message: " + event.data + "\n");
         break;
-    }
-  }
-  // this can probably go once debugged and working correctly!
-  function messageHandler(event) {
-    try {
-      _messageHandler(event);
-    } catch (ex) {
-      dump("ERROR handling worker port control message: " + ex + "\n" + ex.stack);
     }
   }
   // _addEventListener is injected into the sandbox.
@@ -124,7 +113,6 @@ function initClientMessageHandler(workerInfo, workerWindow) {
           return;
         }
         delete workerInfo.ports[portid];
-//        dump(port + " being closed - now " + Object.keys(workerInfo.ports).length + " client ports alive\n");
         port.close();
         break;
 
@@ -132,15 +120,12 @@ function initClientMessageHandler(workerInfo, workerWindow) {
         // the client posted a message to this worker port.
         port = workerInfo.ports[portid];
         if (!port) {
-          // port must be closed - this shouldn't happen!
-          dump("port-message but port is closed\n");
           return;
         }
         port._onmessage(data.data);
         break;
 
       default:
-        dump("unexpected worker message: " + JSON.stringify(event.data) + "\n");
         break;
     }
   }
@@ -238,7 +223,6 @@ AbstractPort.prototype = {
     if (!this._portid) {
       return; // already closed.
     }
-//    dump(this + " is being closed\n");
     this._postControlMessage("port-close");
     // and clean myself up.
     this._handler = null;
@@ -264,7 +248,9 @@ WorkerPort.prototype = {
   },
 
   _onerror: function(err) {
-    // hrmph - probably want to send a message back to the chrome code?
+    // dump() is the only thing available in the worker context to report
+    // errors.  We could possibly send a message back to the chrome code so
+    // it can be logged more appropriately - later..
     dump("Port " + this + " handler failed: " + err + "\n" + err.stack);
   }
 }

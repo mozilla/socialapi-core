@@ -37,11 +37,15 @@ function isDevMode() {
   return enable_dev;
 }
 
+function log(msg) {
+  // dump(msg);
+}
+
 const providerRegistryClassID = Components.ID("{1a60fb78-b2d2-104b-b16a-7f497be5626d}");
 const providerRegistryCID = "@mozilla.org/socialProviderRegistry;1";
 
 function ProviderRegistry(createCallback) {
-  dump("social registry service initializing\n");
+  log("social registry service initializing\n");
   this.createProviderCallback = createCallback;
   this._prefBranch = Services.prefs.getBranch("social.provider.").QueryInterface(Ci.nsIPrefBranch2);
 
@@ -93,7 +97,6 @@ function ProviderRegistry(createCallback) {
     }
     catch(e) {
       Cu.reportError("unable to attachToWindow for "+doc.location+":" + e);
-      dump(e.stack+"\n");
     }
   };
   Services.obs.addObserver(this.injectController.bind(this), 'document-element-inserted', false);
@@ -279,7 +282,7 @@ ProviderRegistry.prototype = {
         }
       }
       if (numEnabled == 0) {
-        dump("provider disabled and no others are enabled - disabling social\n")
+        log("provider disabled and no others are enabled - disabling social\n")
         this.enabled = false;
       } else {
         // don't call this.currentProvider as we don't want to set the pref!
@@ -302,7 +305,7 @@ ProviderRegistry.prototype = {
     return this._enabled;
   },
   set enabled(new_state) {
-    dump("registry set enabled " + new_state + " (current state is " + this._enabled + ")\n");
+    log("registry set enabled " + new_state + " (current state is " + this._enabled + ")\n");
     if (new_state == this._enabled) {
       return;
     }
@@ -320,7 +323,7 @@ ProviderRegistry.prototype = {
       }
       let current = this._findCurrentProvider();
       if (current == null) {
-        dump("attempted to enable browsing but no providers available\n");
+        log("attempted to enable browsing but no providers available\n");
         this._enabled = false;
         return;
       }
