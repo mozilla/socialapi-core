@@ -24,7 +24,7 @@ function install(aParams, aReason) {
 
 function startup(aParams, aReason) {
   let res = Services.io.getProtocolHandler("resource").QueryInterface(Ci.nsIResProtocolHandler);
-  res.setSubstitution("socialapi-core", aParams.resourceURI);
+  res.setSubstitution("socialapi", aParams.resourceURI);
   Services.obs.notifyObservers(null, "socialapi-core-startup", null);
 }
 
@@ -32,7 +32,7 @@ function shutdown(aParams, aReason) {
   // We need to shutdown the typedstorage database else we assert in
   // debug builds at shutdown.
   let tmp = {};
-  Cu.import("resource://socialapi-core/modules/manifestDB.jsm", tmp);
+  Cu.import("resource://socialapi/modules/manifestDB.jsm", tmp);
   tmp.ManifestDB.close();
 
   // Don't need to clean anything else up if the application is shutting down

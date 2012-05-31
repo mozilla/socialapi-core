@@ -1,5 +1,18 @@
 Cu.import("resource://gre/modules/Services.jsm");
 
+// This is the path to the test provider relative to its origin.
+const TEST_PROVIDER_PATH = "/browser/browser/features/socialapi/test/testprovider"
+
+// See http://mxr.mozilla.org/mozilla-central/source/build/pgo/server-locations.txt
+// for other possibly origins we could use.
+const TEST_PROVIDER_ORIGIN = "https://example.com";
+const TEST_PROVIDER_MANIFEST = TEST_PROVIDER_ORIGIN + TEST_PROVIDER_PATH + "/app.manifest";
+
+// Some tests use 2 providers - it really is the same provider but served from
+// a different origin.
+const TEST_PROVIDER2_ORIGIN = "https://test1.example.com"
+const TEST_PROVIDER2_MANIFEST = TEST_PROVIDER2_ORIGIN + TEST_PROVIDER_PATH + "/app.manifest";
+
 function makeTestProvider(input) {
   return {
     name: input.name,
@@ -8,25 +21,37 @@ function makeTestProvider(input) {
     iconURL: input.iconURL,
     origin: input.origin,
     enabled: input.enabled,
+    activate: function() {},
     shutdown: function() {}
   }
 }
 
 // XXX - this is not going to work long term as the other parts of social
 // land - we can re-address that then!
-let registryModule = {}
-Cu.import("resource://socialapi-core/modules/registry.js", registryModule);
+let headModules = {}
+Cu.import("resource://socialapi/modules/registry.js", headModules);
+Cu.import("resource://socialapi/modules/manifest.jsm", headModules);
 try {
-  registryModule.initialize(makeTestProvider);
+  headModules.initialize(makeTestProvider);
 } catch (ex) {
   if (ex.toString() != "Error: already initialized") {
+    info("Unexpected failure to initialize the registry: " + ex)
     throw ex;
   }
   // it's already been done...
 }
 
+function installTestProvider(callback, manifestUrl) {
+  if (!manifestUrl) {
+    manifestUrl = TEST_PROVIDER_MANIFEST;
+  }
+  let ms = headModules.manifestSvc;
+  ms.loadManifest(window.document, manifestUrl, true,
+                  function() {if (callback) executeSoon(callback)});
+}
+
 function removeProvider(origin, cb) {
-  registryModule.registry().remove(origin, function() {
+  headModules.registry().remove(origin, function() {
     if (cb) executeSoon(cb);
   });
 }
@@ -35,7 +60,7 @@ function resetPrefs() {
   let prefBranch = Services.prefs.getBranch("social.provider.").QueryInterface(Ci.nsIPrefBranch2);
   prefBranch.deleteBranch('');
   let tmp = {};
-  Cu.import("resource://socialapi-core/modules/defaultprefs.js", tmp);
+  Cu.import("resource://socialapi/modules/defaultprefs.js", tmp);
   tmp.setDefaultPrefs();
 }
 
@@ -44,14 +69,14 @@ function resetSocial() {
   // have a concept of async - so no callback arg.
   // reset the entire social world back to the state it is on a "clean" first
   // startup - ie, all UI elements and prefs.
-/***  
+/***
   if (isSidebarVisible()) {
     window.social_sidebar_toggle();
   };
-***/  
-  let r = registryModule.registry();
+***/
+  let r = headModules.registry();
   r.enabled = false;
-  // all providers get nuked - we reach into the impl here...
+  // all providers get nuked. - we reach into the impl here...
   let providers = r._providers;
   let origins = Object.keys(providers); // take a copy as we are mutating it
   for each (let origin in origins) {

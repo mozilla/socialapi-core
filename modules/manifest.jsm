@@ -10,34 +10,12 @@
  * Utility methods for dealing with service manifests.
  */
 
-const EXPORTED_SYMBOLS = ['ManifestRegistry', 'isDevMode'];
-
 const {classes: Cc, interfaces: Ci, utils: Cu, manager: Cm} = Components;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
-Cu.import("resource://socialapi-core/modules/manifestDB.jsm");
+Cu.import("resource://socialapi/modules/manifestDB.jsm");
+Cu.import("resource://socialapi/modules/registry.js");
 
-// ack - work around circular import issues.
-function registry() {
-  let tmp = {};
-  Cu.import("resource://socialapi-core/modules/registry.js", tmp);
-  return tmp.registry();
-}
-
-/** Helper function to detect "development mode",
- * which is set with the social.provider.devmode pref.
- *
- * When "devmode" is set, service URLs can be served
- * domains other than the manifest's origin.
- */ 
-function isDevMode() {
-  prefBranch = Services.prefs.getBranch("social.provider.").QueryInterface(Ci.nsIPrefBranch2);
-  let enable_dev = false;
-  try {
-    enable_dev = prefBranch.getBoolPref("devmode");
-  } catch(e) {}
-  return enable_dev;
-}
 
 /**
  * testSafebrowsing
@@ -188,16 +166,16 @@ ManifestRegistry.prototype = {
     // full proto+host+port origin for resolving same-origin urls
     manifest.origin = basePathURI.prePath;
     for each(let k in URLEntries) {
-      
+
       if (!manifest[k]) continue;
-      
+
       // shortcut - resource:// URIs don't get same-origin checks.
       if (builtin && manifest[k].indexOf("resource:") == 0) continue;
-      
+
       // resolve the url to the basepath to handle relative urls, then verify
       // same-origin, we'll let iconURL be on a different origin
       let url = basePathURI.resolve(manifest[k]);
-      
+
       if (k != 'iconURL' && url.indexOf(manifest.origin) != 0) {
         throw new Error("manifest URL origin mismatch " +manifest.origin+ " != " + manifest[k] +"\n")
       }
@@ -302,7 +280,7 @@ ManifestRegistry.prototype = {
       xhr.onreadystatechange = function(aEvt) {
         if (xhr.readyState == 4) {
           if (xhr.status == 200 || xhr.status == 0) {
-            
+
             // We implicitly trust resource:// manifest origins.
             let needSecureManifest = !isDevMode() && url.indexOf("resource://") != 0;
             if (needSecureManifest && !self._checkManifestSecurity(xhr.channel)) {
@@ -326,3 +304,6 @@ ManifestRegistry.prototype = {
     });
   }
 };
+
+const manifestSvc = new ManifestRegistry();
+const EXPORTED_SYMBOLS = ['manifestSvc'];

@@ -6,7 +6,7 @@ DEPTH     = ../../../..
 topsrcdir = @top_srcdir@
 srcdir    = @srcdir@
 VPATH     = @srcdir@
-relativesrcdir  = browser/features/socialapi-core/test
+relativesrcdir  = browser/features/socialapi/test
 
 include $(DEPTH)/config/autoconf.mk
 
@@ -17,8 +17,15 @@ _BROWSER_TEST_FILES = \
   browser_frameworker.js \
   browser_manifest.js \
   browser_registry.js \
-  
+
+  $(NULL)
+
+_BROWSER_TEST_PROVIDER_FILES = \
+  testprovider/app.manifest \
   $(NULL)
 
 libs:: $(_BROWSER_TEST_FILES)
 	$(INSTALL) $(foreach f,$^,"$f") $(DEPTH)/_tests/testing/mochitest/browser/$(relativesrcdir)
+
+libs:: $(_BROWSER_TEST_PROVIDER_FILES)
+	$(INSTALL) $(foreach f,$^,"$f") $(DEPTH)/_tests/testing/mochitest/browser/$(relativesrcdir)/testprovider

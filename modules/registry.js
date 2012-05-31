@@ -15,14 +15,27 @@ const {classes: Cc, interfaces: Ci, utils: Cu, manager: Cm} = Components;
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
-Cu.import("resource://socialapi-core/modules/defaultprefs.js");
-Cu.import("resource://socialapi-core/modules/manifestDB.jsm");
-Cu.import("resource://socialapi-core/modules/manifest.jsm");
-//Cu.import("resource://socialapi-core/modules/defaultServices.jsm");
+Cu.import("resource://socialapi/modules/defaultprefs.js");
+Cu.import("resource://socialapi/modules/manifestDB.jsm");
+//Cu.import("resource://socialapi/modules/defaultServices.jsm");
 
 const NS_XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
 const FRECENCY = 100;
 
+/** Helper function to detect "development mode",
+ * which is set with the social.provider.devmode pref.
+ *
+ * When "devmode" is set, service URLs can be served
+ * domains other than the manifest's origin.
+ */
+function isDevMode() {
+  let prefBranch = Services.prefs.getBranch("social.provider.").QueryInterface(Ci.nsIPrefBranch2);
+  let enable_dev = false;
+  try {
+    enable_dev = prefBranch.getBoolPref("devmode");
+  } catch(e) {}
+  return enable_dev;
+}
 
 const providerRegistryClassID = Components.ID("{1a60fb78-b2d2-104b-b16a-7f497be5626d}");
 const providerRegistryCID = "@mozilla.org/socialProviderRegistry;1";
@@ -30,7 +43,6 @@ const providerRegistryCID = "@mozilla.org/socialProviderRegistry;1";
 function ProviderRegistry(createCallback) {
   dump("social registry service initializing\n");
   this.createProviderCallback = createCallback;
-  this.manifestRegistry = new ManifestRegistry();
   this._prefBranch = Services.prefs.getBranch("social.provider.").QueryInterface(Ci.nsIPrefBranch2);
 
   Services.obs.addObserver(this, "private-browsing", false);
@@ -211,7 +223,7 @@ ProviderRegistry.prototype = {
       cb(provider);
     }
   },
-  enableProvider: function(origin) {
+  enableProvider: function(origin, callback) {
     let provider = this._providers[origin];
     if (!provider) {
       return false;
@@ -224,6 +236,7 @@ ProviderRegistry.prototype = {
       manifest.enabled = true;
       ManifestDB.put(origin, manifest);
       Services.obs.notifyObservers(null, "social-service-manifest-changed", origin);
+      if (callback) callback();
     });
     provider.enabled = true;
     // if browsing is disabled we can't activate it!
@@ -236,7 +249,7 @@ ProviderRegistry.prototype = {
     // but doesn't get that status simply because it was enabled.
     return true;
   },
-  disableProvider: function(origin) {
+  disableProvider: function(origin, callback) {
     let provider = this._providers[origin];
     if (!provider) {
       return false;
@@ -251,6 +264,7 @@ ProviderRegistry.prototype = {
       manifest.enabled = false;
       ManifestDB.put(origin, manifest);
       Services.obs.notifyObservers(null, "social-service-manifest-changed", origin);
+      if (callback) callback();
     });
 
     if (this._currentProvider && this._currentProvider == provider) {
@@ -339,4 +353,4 @@ function initialize(createCallback) {
 }
 
 function registry() providerRegistrySingleton;
-const EXPORTED_SYMBOLS = ["registry", "initialize"];
+const EXPORTED_SYMBOLS = ["registry", "initialize", "isDevMode"];
