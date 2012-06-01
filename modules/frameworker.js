@@ -85,8 +85,8 @@ function __initWorkerMessageHandler() {
         break;
     }
   }
-  // _addEventListener is injected into the sandbox.
-  _addEventListener('message', messageHandler);
+  // addEventListener is injected into the sandbox.
+  addEventListener('message', messageHandler);
 }
 
 // And this is the message listener for the *client* (ie, chrome) side of the world.
@@ -243,8 +243,8 @@ WorkerPort.prototype = {
   _portType: "worker",
 
   _dopost: function(data) {
-    // _postMessage is injected into the sandbox.
-    _postMessage(data, "*");
+    // postMessage is injected into the sandbox.
+    postMessage(data, "*");
   },
 
   _onerror: function(err) {
@@ -381,7 +381,7 @@ function FrameWorker(url, clientWindow, name) {
         for each(let fn in workerAPI) {
           try {
             if (workerWindow[fn]) {
-              sandbox.importFunction(workerWindow[fn], fn);
+              sandbox[fn] = workerWindow[fn];
             }
           }
           catch(e) {
@@ -393,7 +393,7 @@ function FrameWorker(url, clientWindow, name) {
           set: function(val) { workerWindow.document.cookie = val },
           enumerable: true
         });
-        sandbox.importFunction(function importScripts() {
+        sandbox.importScripts = function importScripts() {
           if (arguments.length < 1) return;
           let workerURI = Services.io.newURI(url, null, null);
           for each(let uri in arguments) {
@@ -424,7 +424,7 @@ function FrameWorker(url, clientWindow, name) {
             };
             xhr.send(null);
           }
-        }, 'importScripts');
+        };
         // and we delegate ononline and onoffline events to the worker.
         // See http://www.whatwg.org/specs/web-apps/current-work/multipage/workers.html#workerglobalscope
         frame.addEventListener('offline', function(event) {
@@ -434,14 +434,13 @@ function FrameWorker(url, clientWindow, name) {
           Cu.evalInSandbox("ononline();", sandbox);
         }, false);
 
-        sandbox.importFunction(workerWindow.postMessage, "_postMessage");
-        sandbox.importFunction(workerWindow.addEventListener, "_addEventListener");
+        sandbox.postMessage = function(d, o) { workerWindow.postMessage(d, o) };
+        sandbox.addEventListener = function(t, l, c) { workerWindow.addEventListener(t, l, c) };
 
         // And a very hacky work-around for bug 734215
-        workerWindow.bufferToArrayHack = function(a) {
+        sandbox.bufferToArrayHack = function(a) {
             return new workerWindow.Uint8Array(a);
         };
-        sandbox.importFunction(workerWindow.bufferToArrayHack, "bufferToArrayHack");
 
         workerWindow.addEventListener("load", function() {
           log("got worker onload event for " + workerName);
