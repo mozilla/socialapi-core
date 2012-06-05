@@ -92,14 +92,15 @@ ManifestRegistry.prototype = {
     let nId = "manifest-ask-install";
     let nBox = aWindow.gBrowser.getNotificationBox();
     let notification = nBox.getNotificationWithValue(nId);
+    let strings = Services.strings.createBundle("chrome://socialapi/locale/strings.properties");
 
     // Check that we aren't already displaying our notification
     if (!notification) {
       let self = this;
-      let message = "This site supports additional functionality for Firefox, would you like to install it?";
+      let message = strings.GetStringFromName("installoffer.notificationbar");
 
       buttons = [{
-        label: "Yes",
+        label: strings.GetStringFromName("yes.label"),
         accessKey: null,
         callback: function () {
           aWindow.setTimeout(function () {
@@ -108,8 +109,8 @@ ManifestRegistry.prototype = {
         }
       },
       {
-        label: "Don't ask again",
-        accessKey: 'd',
+        label: strings.GetStringFromName("dontask.label"),
+        accessKey: strings.GetStringFromName("dontask.accesskey"),
         callback: function() {
           self._prefBranch.setBoolPref(origin+".ignore", true);
         }
